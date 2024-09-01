@@ -1,11 +1,11 @@
+from dataclasses import dataclass
 import functools
 import re
+from typing import ClassVar, Optional
 
-import attr
 import coverage
 from coverage.data import CoverageData as CoveragePyData
 
-from ._compat import FileNotFoundError
 from .exceptions import CoverageWrapperException
 from .logger import logger
 from .utils import is_executable_line
@@ -14,12 +14,12 @@ RE_EXCLUDED = re.compile(
     r'"\s*(pragma|PRAGMA)[:\s]?\s*(no|NO)\s*(cover|COVER)')
 
 
-@attr.s(frozen=True)
-class CoverageData(object):
-    cov_data = attr.ib(default=None)
-    data_file = attr.ib(default=None)
+@dataclass(frozen=True)
+class CoverageData:
+    cov_data = None
+    data_file = None
 
-    def __attrs_post_init__(self):
+    def __post_init__(self):
         if self.cov_data is not None:
             if not isinstance(self.cov_data, CoveragePyData):
                 raise TypeError('data needs to be of type %s.%s' % (
@@ -59,16 +59,16 @@ def handle_coverage_exceptions(f):
     return wrapper
 
 
-@attr.s(frozen=True)
+@dataclass(frozen=True)
 class CoverageWrapper(object):
     """Wrap Coveragepy related functionality."""
-    data = attr.ib(default=None)
-    data_file = attr.ib(default=None)
-    config_file = attr.ib(default=None)
+    data = None
+    data_file = None
+    config_file = None
 
-    _cached_cov_obj = None
+    _cached_cov_obj: ClassVar[Optional[coverage.Coverage]] = None
 
-    def __attrs_post_init__(self):
+    def __post_init__(self):
         if not isinstance(self.data, CoverageData):
             data = CoverageData(cov_data=self.data, data_file=self.data_file)
             object.__setattr__(self, 'data', data)

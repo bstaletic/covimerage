@@ -5,18 +5,18 @@ class CustomClickException(click.ClickException):
     """Wrap click.ClickException for exit_code."""
     def __init__(self, *args, **kwargs):
         self.exit_code = kwargs.pop('exit_code', 1)
-        super(CustomClickException, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 class CoverageWrapperException(CustomClickException):
     """Inherit from CustomClickException for automatic handling."""
     def __init__(self, message, orig_exc=None):
         self.orig_exc = orig_exc
-        super(CoverageWrapperException, self).__init__(message)
+        super().__init__(message)
 
     def format_message(self):
         """Append information about original exception if any."""
-        msg = super(CoverageWrapperException, self).format_message()
+        msg = super().format_message()
         if self.orig_exc:
             return '%s (%s: %s)' % (
                 msg,

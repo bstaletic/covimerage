@@ -1,10 +1,10 @@
 """The main covimerage module."""
 import copy
+from dataclasses import dataclass, field
 import itertools
 import os
 import re
-
-import attr
+from typing import IO, ClassVar, Optional
 
 from .coveragepy import CoverageData
 from .logger import logger
@@ -25,27 +25,35 @@ def get_version():
     return version
 
 
-@attr.s
-class Line(object):
+@dataclass
+class Line:
     """A source code line."""
-    line = attr.ib()
-    count = attr.ib(default=None)
-    total_time = attr.ib(default=None)
-    self_time = attr.ib(default=None)
+    line: str
+    count: int = None
+    total_time: float = None
+    self_time: float = None
     _parsed_line = None
 
 
-@attr.s(hash=True)
-class Script(object):
-    path = attr.ib()
-    lines = attr.ib(default=attr.Factory(dict), repr=False, hash=False)
+@dataclass(unsafe_hash=True)
+class Script:
+    path: str
+    lines: dict = field(default_factory=dict,
+                        repr=False,
+                        hash=False)
     # List of line numbers for dict functions.
-    dict_functions = attr.ib(default=attr.Factory(set), repr=False, hash=False)
+    dict_functions: set = field(default_factory=set,
+                                repr=False,
+                                hash=False)
     # List of line numbers for dict functions that have been mapped already.
-    mapped_dict_functions = attr.ib(default=attr.Factory(set), repr=False,
-                                    hash=False)
-    func_to_lnums = attr.ib(default=attr.Factory(dict), repr=False, hash=False)
-    sourced_count = attr.ib(default=None)
+    mapped_dict_functions: set = field(default_factory=set,
+                                       repr=False,
+                                       hash=False)
+
+    func_to_lnums: dict = field(default_factory=dict,
+                                repr=False,
+                                hash=False)
+    sourced_count: int = None
 
     def parse_function(self, lnum, line):
         m = re.match(RE_FUNC_PREFIX, line)
@@ -61,28 +69,28 @@ class Script(object):
             self.func_to_lnums.setdefault(f, []).append(lnum)
 
 
-@attr.s
-class Function(object):
-    name = attr.ib()
-    total_time = attr.ib(default=None)
-    self_time = attr.ib(default=None)
-    lines = attr.ib(default=attr.Factory(dict), repr=False)
+@dataclass(unsafe_hash=True)
+class Function:
+    name: str
+    total_time: float = None
+    self_time: float = None
+    lines: dict = field(default_factory=dict, repr=False)
     source = None
 
 
-@attr.s
-class MergedProfiles(object):
-    profiles = attr.ib(default=attr.Factory(list))
-    source = attr.ib(default=attr.Factory(list))
-    append_to = attr.ib(default=None)
+@dataclass
+class MergedProfiles:
+    profiles: list = field(default_factory=list)
+    source: list = field(default_factory=list)
+    append_to: str = None
 
-    _coveragepy_data = None
+    _coveragepy_data: ClassVar[Optional[CoverageData]] = None
 
     def __setattr__(self, name, value):
         """Invalidate cache if profiles get changed."""
         if name == 'profiles':
             self._coveragepy_data = None
-        super(MergedProfiles, self).__setattr__(name, value)
+        super().__setattr__(name, value)
 
     def add_profile_files(self, *profile_files):
         for f in profile_files:
@@ -199,16 +207,15 @@ class MergedProfiles(object):
         return True
 
 
-@attr.s
-class Profile(object):
-    fname = attr.ib()
-    # TODO: make this a dict?  (scripts_by_fname)
-    scripts = attr.ib(default=attr.Factory(list))
-    anonymous_functions = attr.ib(default=attr.Factory(dict))
-    _fobj = None
-    _fstr = None
+@dataclass
+class Profile:
+    fname: str
+    scripts: list[Script] = field(default_factory=list)
+    anonymous_functions: dict[str, tuple[Script, int]] = field(default_factory=dict)
+    _fstr: ClassVar[Optional[str]] = None
+    _fobj: ClassVar[Optional[IO]] = None
 
-    def __attrs_post_init__(self):
+    def __post_init__(self):
         self.fname, self._fobj, self._fstr = get_fname_and_fobj_and_str(
             self.fname)
         self.scripts_by_fname = {}
