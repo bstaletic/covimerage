@@ -5,7 +5,6 @@ import os
 import re
 
 import attr
-from click.utils import string_types
 
 from .coveragepy import CoverageData
 from .logger import logger
@@ -196,21 +195,7 @@ class MergedProfiles(object):
             logger.warning('Not writing coverage file: no data to report!')
             return False
 
-        if isinstance(data_file, string_types):
-            logger.info('Writing coverage file %s.', data_file)
-            try:
-                write_file = cov_data.write_file
-            except AttributeError:
-                # coveragepy 5
-                write_file = cov_data._write_file
-            write_file(data_file)
-        else:
-            try:
-                filename = data_file.name
-            except AttributeError:
-                filename = str(data_file)
-            logger.info('Writing coverage file %s.', filename)
-            cov_data.write_fileobj(data_file)
+        cov_data.write()
         return True
 
 
@@ -331,7 +316,7 @@ class Profile(object):
             # are joined, while script lines might be spread
             # across several lines (prefixed with \).
             script_source = s_line.line
-            if script_source != f_line.line:
+            if script_source != f_line.line.lstrip():
                 while True:
                     peek = script.lines[script_lnum + f_lnum + 1]
                     m = RE_CONTINUING_LINE.match(peek.line)
@@ -339,7 +324,7 @@ class Profile(object):
                         script_source += peek.line[m.end():]
                         script_lnum += 1
                         continue
-                    if script_source == f_line.line:
+                    if script_source == f_line.line.lstrip():
                         break
                     return False
         return True
@@ -379,13 +364,13 @@ class Profile(object):
             if in_script or in_function:
                 lnum += 1
                 try:
-                    count, total_time, self_time = parse_count_and_times(line)
+                    t = parse_count_and_times(line)
+                    count, total_time, self_time, source_line = t
                 except Exception as exc:
                     logger.warning(
                         'Could not parse count/times (%s:%d, %r): %r.',
                         self._fstr, plnum, line, exc)
                     continue
-                source_line = line[28:]
 
                 if in_script:
                     if count is None and RE_CONTINUING_LINE.match(source_line):
@@ -481,7 +466,7 @@ class Profile(object):
             # are joined, while script lines might be spread
             # across several lines (prefixed with \).
             script_source = s_line.line
-            if script_source != f_line.line:
+            if script_source != f_line.line.lstrip():
                 while True:
                     try:
                         peek = script.lines[script_lnum + f_lnum + 1]
@@ -493,7 +478,7 @@ class Profile(object):
                             script_source += peek.line[m.end():]
                             script_lnum += 1
                             continue
-                    if script_source == f_line.line:
+                    if script_source == f_line.line.lstrip():
                         break
 
                     logger.warning(
@@ -533,25 +518,19 @@ class Profile(object):
 
 
 def parse_count_and_times(line):
-    count = line[0:5]
-    if count == '':
-        return 0, None, None
-    if count == '     ':
-        count = None
-    else:
-        count = int(count)
-    total_time = line[8:16]
-    if total_time == '        ':
-        total_time = None
-    else:
-        total_time = float(total_time)
-    self_time = line[19:27]
-    if self_time == '        ':
-        self_time = None
-    else:
-        self_time = float(self_time)
-
-    return count, total_time, self_time
+    line_regex = re.compile(r'^\s*(\d+)\s+([0-9.]+)\s+([0-9.]+)\s+(.+)$')
+    if match := line_regex.fullmatch(line):
+        return (int(match.group(1)),
+                float(match.group(2)),
+                float(match.group(3)),
+                match.group(4))
+    line_regex = re.compile(r'^\s*(\d+)\s+([0-9.]+)\s+(.+)$')
+    if match := line_regex.fullmatch(line):
+        return (int(match.group(1)),
+                float(match.group(2)),
+                None,
+                match.group(3))
+    return None, None, None, line.lstrip()
 
 
 def coverage_init(reg, options):

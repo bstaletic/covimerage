@@ -3,20 +3,15 @@ import re
 
 import attr
 import coverage
+from coverage.data import CoverageData as CoveragePyData
 
 from ._compat import FileNotFoundError
 from .exceptions import CoverageWrapperException
 from .logger import logger
-from .utils import get_fname_and_fobj_and_str, is_executable_line
+from .utils import is_executable_line
 
 RE_EXCLUDED = re.compile(
     r'"\s*(pragma|PRAGMA)[:\s]?\s*(no|NO)\s*(cover|COVER)')
-
-
-try:
-    from coverage.data import CoverageJsonData as CoveragePyData
-except ImportError:
-    from coverage.data import CoverageData as CoveragePyData
 
 
 @attr.s(frozen=True)
@@ -33,25 +28,14 @@ class CoverageData(object):
             if self.data_file is not None:
                 raise TypeError('data and data_file are mutually exclusive.')
             return
-        cov_data = CoveragePyData()
+        cov_data = CoveragePyData(self.data_file, suffix=True)
         if self.data_file:
-            fname, fobj, fstr = get_fname_and_fobj_and_str(self.data_file)
             try:
-                if fobj:
-                    try:
-                        read_fileobj = cov_data.read_fileobj
-                    except AttributeError:  # made private in coveragepy 5
-                        read_fileobj = cov_data._read_fileobj
-                    read_fileobj(fobj)
-                else:
-                    try:
-                        read_file = cov_data.read_file
-                    except AttributeError:  # made private in coveragepy 5
-                        read_file = cov_data._read_file
-                    read_file(fname)
+                cov_data.read()
             except coverage.CoverageException as exc:
                 raise CoverageWrapperException(
-                    'Coverage could not read data_file: %s' % fstr,
+                    'Coverage could not read data_file: %s' %
+                    cov_data.data_filename(),
                     orig_exc=exc)
         object.__setattr__(self, 'cov_data', cov_data)
 
@@ -188,6 +172,17 @@ class FileReporter(coverage.FileReporter):
         return set(lines)
 
 
+class FileTracer(coverage.FileTracer):
+    def __init__(self, filename):
+        self._filename = filename
+
+    def source_filename(self):
+        return self._filename
+
+
 class CoveragePlugin(coverage.CoveragePlugin):
     def file_reporter(self, filename):
         return FileReporter(filename)
+
+    def file_tracer(self, filename):
+        return FileTracer(filename) if filename.endswith('.vim') else None
